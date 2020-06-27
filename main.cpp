@@ -3,10 +3,17 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <dirent.h>
 #include <assert.h>
 
+// platform independent filesystem interface
+#ifdef _MSC_VER
+#include "dirent.h"
+#else
+#include <dirent.h>
+#endif
+
 #define STB_DEFINE
+#define STB_NO_REGISTRY
 #include "stb.h"
 
 typedef int8_t  s8;
@@ -208,8 +215,8 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     s32 population = POPULATION;
     s32 parent_count = population / 2;
     s32 candidate_size = node_count * sizeof(Edge);
-    void *candidates = calloc(population + parent_count, candidate_size);
-    void *parents = candidates + population * candidate_size;
+    u8 *candidates = (u8 *)calloc(population + parent_count, candidate_size);
+    u8 *parents = candidates + population * candidate_size;
 
     struct Score {s32 oncts; s32 index;};
     Score *scores = (Score *)malloc(sizeof(Score) * population);
