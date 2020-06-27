@@ -1,5 +1,5 @@
 #define POPULATION  1000
-#define GENERATIONS 350
+#define GENERATIONS 150
 
 #include <stdio.h>
 #include <stdint.h>
