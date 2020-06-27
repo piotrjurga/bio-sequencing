@@ -180,7 +180,7 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
             }
             s32 overlap = get_overlap(dict[node_i], dict[dest_i], onct_length);
 #ifdef SPARSE_GRAPH
-            if (overlap > 1)
+            if (overlap > 0)
 #endif
             {
                 Edge e;
