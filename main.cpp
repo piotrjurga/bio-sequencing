@@ -1,5 +1,6 @@
-#define POPULATION  1000
-#define GENERATIONS 150
+#define POPULATION  2000
+#define GENERATIONS 2000
+#define MUTATIONS 2
 
 #include <stdio.h>
 #include <stdint.h>
@@ -277,13 +278,21 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
              candidate_index < population;
              candidate_index++)
         {
-            Edge *candidate = (Edge *)(candidates + candidate_index*candidate_size);
-            s32 parent_i = candidate_index % parent_count;
-            Edge *parent = (Edge *)(candidates + parent_i*candidate_size);
-            memcpy(candidate, parent, candidate_size);
+            s32 parent_a_i = candidate_index % parent_count;
+            s32 parent_b_i = (candidate_index+7) % parent_count;
+            s32 size_a = (node_count/2) * sizeof(Edge);
+            s32 size_b = candidate_size - size_a;
+            Edge *parent_a = (Edge *)(candidates + parent_a_i*candidate_size);
+            Edge *parent_b = (Edge *)(candidates + parent_b_i*candidate_size + size_a);
+            Edge *candidate   = (Edge *)(candidates + candidate_index*candidate_size);
+            Edge *candidate_b = (Edge *)(candidates + candidate_index*candidate_size + size_a);
+            // move the first half of the genes from the first parent
+            memcpy(candidate, parent_a, size_a);
+            // move the second half of the genes from the second parent
+            memcpy(candidate_b, parent_b, size_b);
 
             // mutate
-            for (s32 i = 0; i < 1; i++) {
+            for (s32 i = 0; i < MUTATIONS; i++) {
                 s32 node_to_mutate = stb_rand() % node_count;
                 Node node = graph[node_to_mutate];
                 double rand_v = stb_frand();
