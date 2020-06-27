@@ -1,6 +1,10 @@
-#define POPULATION  2000
-#define GENERATIONS 2000
+#define POPULATION  1024
+#define GENERATIONS 128
 #define MUTATIONS 2
+#define BREED
+#define SPARSE_GRAPH
+#define PARALLEL
+//#define SINGLE_TEST
 
 #include <stdio.h>
 #include <stdint.h>
@@ -175,7 +179,9 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
                 test++;
             }
             s32 overlap = get_overlap(dict[node_i], dict[dest_i], onct_length);
-            if (overlap > 0)
+#ifdef SPARSE_GRAPH
+            if (overlap > 1)
+#endif
             {
                 Edge e;
                 e.next = dest_i;
@@ -207,7 +213,7 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     //
 
     s32 population = POPULATION;
-    s32 parent_count = population / 2;
+    s32 parent_count = population / 10;
     s32 candidate_size = node_count * sizeof(Edge);
     void *candidates = calloc(population + parent_count, candidate_size);
     void *parents = candidates + population * candidate_size;
@@ -263,6 +269,7 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
         qsort(scores, population, sizeof(Score), stb_intcmprev(0));
 
         // save the best solutions for breeding
+        // TODO(piotr): parallel for?
         for (s32 parent_i = 0; parent_i < parent_count; parent_i++) {
             Edge *parent_slot = (Edge *)(parents + parent_i*candidate_size);
             s32 old_index = scores[parent_i].index;
@@ -274,13 +281,20 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
         memcpy(candidates, parents, parent_count * candidate_size);
 
         // set the rest of the population to modified versions of parents
+#ifdef PARALLEL
+#pragma omp parallel for
+#endif
         for (s32 candidate_index = parent_count;
              candidate_index < population;
              candidate_index++)
         {
+#ifdef BREED
             s32 parent_a_i = candidate_index % parent_count;
-            s32 parent_b_i = (candidate_index+7) % parent_count;
-            s32 size_a = (node_count/2) * sizeof(Edge);
+            s32 parent_b_i = stb_rand() % parent_count;
+            s32 split = stb_rand() % node_count;
+            //s32 split = node_count/2;
+            s32 size_a = split * sizeof(Edge);
+            //s32 size_a = (node_count/2) * sizeof(Edge);
             s32 size_b = candidate_size - size_a;
             Edge *parent_a = (Edge *)(candidates + parent_a_i*candidate_size);
             Edge *parent_b = (Edge *)(candidates + parent_b_i*candidate_size + size_a);
@@ -290,6 +304,12 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
             memcpy(candidate, parent_a, size_a);
             // move the second half of the genes from the second parent
             memcpy(candidate_b, parent_b, size_b);
+#else
+            Edge *candidate = (Edge *)(candidates + candidate_index*candidate_size);
+            s32 parent_i = candidate_index % parent_count;
+            Edge *parent = (Edge *)(candidates + parent_i*candidate_size);
+            memcpy(candidate, parent, candidate_size);
+#endif
 
             // mutate
             for (s32 i = 0; i < MUTATIONS; i++) {
@@ -326,7 +346,7 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
 int main(int argc, char **argv) {
     stb_srand(time(0));
 
-#if 0
+#ifdef SINGLE_TEST
     //char *path = "test.txt";
     char *path = "Instances/RandomNegativeErrors/9.200-40.txt";
     s32 original_oncts = 200;
@@ -337,8 +357,9 @@ int main(int argc, char **argv) {
     double percent_score = 0;
     Edge *best = solve(dict, dict_size, original_oncts, &percent_score);
     (void)best;
-    print_path(dict, best, 209);
-    print_solution(dict, best, 209);
+    printf("9.200-40.txt\t%f%%\n", percent_score);
+    //print_path(dict, best, 209);
+    //print_solution(dict, best, 209);
 
     return 0;
 #endif
