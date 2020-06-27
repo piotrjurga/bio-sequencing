@@ -1,13 +1,10 @@
-//
-// notes:
-// should we sometimes allow revisiting nodes? for the instances with repetitions
-//
+#define POPULATION  1000
+#define GENERATIONS 350
 
 #include <stdio.h>
 #include <stdint.h>
 #include <dirent.h>
 #include <assert.h>
-#include <algorithm>
 
 #define STB_DEFINE
 #include "stb.h"
@@ -137,7 +134,7 @@ s32 optimize_and_score(Edge *candidate, Node *graph, s32 onct_length,
                     break;
                 }
             }
-            if (i == graph[current].edge_count) {
+            if (i == graph[current].edge_count) { // legal edge not found
                 break;
             }
         }
@@ -148,12 +145,12 @@ s32 optimize_and_score(Edge *candidate, Node *graph, s32 onct_length,
     return oncts_visited;
 }
 
-Edge * solve(char **dict, s32 dict_size, s32 original_oncts) {
+Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_score) {
     s32 onct_length = strlen(dict[0]);
     s32 max_solution_length = original_oncts + onct_length - 1;
 
     //
-    // build the main graph
+    // build the graph
     //
 
     s32 node_count = dict_size;
@@ -177,7 +174,7 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts) {
                 test++;
             }
             s32 overlap = get_overlap(dict[node_i], dict[dest_i], onct_length);
-            //if (overlap > 0)
+            if (overlap > 0)
             {
                 Edge e;
                 e.next = dest_i;
@@ -208,8 +205,8 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts) {
     // create population
     //
 
-    s32 population = 1000;
-    s32 parent_count = population / 10;
+    s32 population = POPULATION;
+    s32 parent_count = population / 2;
     s32 candidate_size = node_count * sizeof(Edge);
     void *candidates = calloc(population + parent_count, candidate_size);
     void *parents = candidates + population * candidate_size;
@@ -225,7 +222,6 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts) {
         for (s32 i = 0; i < node_count; i++) {
             s32 edge_count = graph[i].edge_count;
             if (edge_count) {
-                //s32 chosen_edge = stb_rand() % edge_count;
                 //s32 chosen_edge = stb_rand() % stb_min(2, edge_count);
                 s32 chosen_edge = 0;
                 candidate[i] = graph[i].edges[chosen_edge];
@@ -242,22 +238,28 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts) {
     // evolve
     //
 
-//#define CPPSORT
-#ifdef CPPSORT
-    struct {
-        bool operator()(Score a, Score b) const {
-            return a.oncts > b.oncts;
+    s32 generations = GENERATIONS;
+    for (s32 gen_index = 0; gen_index < generations; gen_index++) {
+#if 0
+        printf("gen %d\n", gen_index);
+        // print all candidates
+        for (s32 i = 0; i < population; i++) {
+            Edge *candidate = (Edge *)(candidates + i*candidate_size);
+            for (s32 j = 0; j < node_count; j++) {
+                Edge e = candidate[j];
+                Node n = graph[j];
+                for (s32 k = 0; k < n.edge_count; k++) {
+                    if (n.edges[k].next == e.next) {
+                        printf("%d;", k);
+                        break;
+                    }
+                }
+            }
+            puts("");
         }
-    } scoreCompare;
 #endif
 
-    s32 generations = 300;
-    for (s32 gen_index = 0; gen_index < generations; gen_index++) {
-#ifdef CPPSORT
-        std::sort(scores, scores+population, scoreCompare);
-#else
         qsort(scores, population, sizeof(Score), stb_intcmprev(0));
-#endif
 
         // save the best solutions for breeding
         for (s32 parent_i = 0; parent_i < parent_count; parent_i++) {
@@ -279,16 +281,15 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts) {
             s32 parent_i = candidate_index % parent_count;
             Edge *parent = (Edge *)(candidates + parent_i*candidate_size);
             memcpy(candidate, parent, candidate_size);
+
             // mutate
-            s32 node_to_mutate = stb_rand() % node_count;
-            Node node = graph[node_to_mutate];
-            s32 new_edge = (s32)(stb_frand() * stb_frand() * node.edge_count);
-            //s32 new_edge = stb_rand() % node.edge_count;
-            candidate[node_to_mutate] = node.edges[new_edge];
-/*
-            s32 score = score_candidate(candidate, onct_length,
-                                        max_solution_length, node_count);
-*/
+            for (s32 i = 0; i < 1; i++) {
+                s32 node_to_mutate = stb_rand() % node_count;
+                Node node = graph[node_to_mutate];
+                double rand_v = stb_frand();
+                s32 new_edge = (s32)(rand_v * rand_v * node.edge_count);
+                candidate[node_to_mutate] = node.edges[new_edge];
+            }
             s32 score = optimize_and_score(candidate, graph, onct_length,
                                            max_solution_length, node_count);
             scores[candidate_index].oncts = score;
@@ -300,8 +301,8 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts) {
     s32 best_score = scores[0].oncts;
     s32 best_index = scores[0].index;
     s32 optimal_score = stb_min(dict_size, original_oncts);
-
-    printf("best = %d (%f%%)\n", best_score, 100*(double)best_score / (double)optimal_score);
+    *percent_score = 100*(double)best_score / (double)optimal_score;
+    //printf("best = %d (%f%%)\n", best_score, *percent_score);
 
     Edge *best_candidate = (Edge *)malloc(candidate_size);
     memcpy(best_candidate,
@@ -313,32 +314,35 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts) {
     return best_candidate;
 }
 
-int main() {
+int main(int argc, char **argv) {
     stb_srand(time(0));
 
 #if 0
     //char *path = "test.txt";
-    char *path = "Instances/RandomNegativeErrors/9.200-80.txt";
+    char *path = "Instances/RandomNegativeErrors/9.200-40.txt";
     s32 original_oncts = 200;
     char **dict;
     s32 dict_size;
     dict = stb_stringfile(path, &dict_size);
 
-    Edge *best = solve(dict, dict_size, original_oncts);
+    double percent_score = 0;
+    Edge *best = solve(dict, dict_size, original_oncts, &percent_score);
     (void)best;
-    //print_path(dict, best, 209);
-    //print_solution(dict, best, 209);
+    print_path(dict, best, 209);
+    print_solution(dict, best, 209);
 
     return 0;
 #endif
 
-
+    assert(argc > 1);
     char *problem_dirs[] = {"Instances/PositiveErrorsWithDistortions",
                             "Instances/RandomNegativeErrors",
                             "Instances/RandomPositiveErrors",
                             "Instances/RepetitionNegativeErrors"};
-    char *problem_dir_path = problem_dirs[1];
+    char *problem_dir_path = problem_dirs[atoi(argv[1])];
     DIR *problem_dir = opendir(problem_dir_path);
+
+    double *scores = 0;
 
     struct dirent *dir_entry;
     while (dir_entry = readdir(problem_dir)) {
@@ -353,13 +357,24 @@ int main() {
         char **dict;
         s32 dict_size;
         dict = stb_stringfile(path, &dict_size);
-        s32 onct_length = strlen(dict[0]);
-        s32 max_solution_length = original_oncts + onct_length - 1;
+        //s32 onct_length = strlen(dict[0]);
+        //s32 max_solution_length = original_oncts + onct_length - 1;
+        double percent_score = 0;
 
-        Edge *best = solve(dict, dict_size, original_oncts);
-        s32 result = score_candidate(best, onct_length, max_solution_length, dict_size);
-        printf("%s\t%d\n", dir_entry->d_name, result);
+        Edge *best = solve(dict, dict_size, original_oncts, &percent_score);
+        (void)best;
+        stb_arr_push(scores, percent_score);
+        printf("%s\t%f%%\n", dir_entry->d_name, percent_score);
+        //s32 result = score_candidate(best, onct_length, max_solution_length, dict_size);
     }
+
+    // calculate average percent score
+    double sum = 0;
+    for (s32 i = 0; i < stb_arr_len(scores); i++) {
+        sum += scores[i];
+    }
+    double average = sum / stb_arr_len(scores);
+    printf("average = %f%%\n", average);
         
     return 0;
 }
