@@ -22,7 +22,7 @@
 
 // for the moment optimizing the graph actually makes the results worse
 // it may be caused by storing the merged nodes in candidates
-//#define OPTIMIZE_GRAPH
+#define OPTIMIZE_GRAPH
 
 // hypothetical alternate breeding schemes:
 // find a place in the parent_a where it would be appropriate
@@ -163,6 +163,49 @@ s32 optimize_and_score(Edge *candidate, Node *graph, s32 onct_length,
     while (candidate[current].cost) {
         visited[current] = true;
         oncts_visited++;
+        Edge edge = candidate[current];
+        bool too_long = edge.cost + total_length > max_solution_length;
+        bool next_visited = visited[edge.next];
+        if (too_long || next_visited) {
+            // try to find a legal edge
+            s32 i;
+            for (i = 0; i < graph[current].edge_count; i++) {
+                edge = graph[current].edges[i];
+                too_long = edge.cost + total_length > max_solution_length;
+                next_visited = visited[edge.next];
+                if (!too_long && !next_visited) {
+                    candidate[current] = edge;
+                    break;
+                }
+            }
+            if (i == graph[current].edge_count) { // legal edge not found
+                break;
+            }
+        }
+        total_length += edge.cost;
+        current = edge.next;
+        assert(current >= 0 && current < node_count);
+    }
+    return oncts_visited;
+}
+
+s32 mutate_optimize_and_score(Edge *candidate, Node *graph, s32 onct_length,
+                       s32 max_solution_length, s32 node_count, s32 mutate_after) {
+    s32 oncts_visited = 0;
+    s32 total_length = onct_length;
+    s32 current = 0;
+    u8 visited[1024] = {};
+    bool mutation_done = false;
+    while (candidate[current].cost) {
+        visited[current] = true;
+        oncts_visited++;
+        if (!mutation_done && oncts_visited >= mutate_after && graph[current].edge_count > 1) {
+            double rand_v = stb_frand();
+            s32 new_edge_i = (s32)(rand_v * rand_v * graph[current].edge_count);
+            Edge new_edge = graph[current].edges[new_edge_i];
+            candidate[current] = new_edge;
+            mutation_done = true;
+        }
         Edge edge = candidate[current];
         bool too_long = edge.cost + total_length > max_solution_length;
         bool next_visited = visited[edge.next];
@@ -395,7 +438,9 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
                 memcpy(parent_slot, parent, candidate_size);
             }
             // move them to the beggining of the population
+#ifdef PARALLEL
 #pragma omp single
+#endif
             memcpy(candidates, parents, parent_count * candidate_size);
 
             // set the rest of the population to modified versions of parents
@@ -428,7 +473,10 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
                 Edge *parent = (Edge *)(candidates + parent_i*candidate_size);
                 memcpy(candidate, parent, candidate_size);
 #endif
+                //
                 // mutate
+                //
+#if 0
                 for (s32 i = 0; i < MUTATIONS; i++) {
                     s32 node_to_mutate = stb_rand() % node_count;
                     Node node = graph[node_to_mutate];
@@ -438,6 +486,11 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
                 }
                 s32 score = optimize_and_score(candidate, graph, onct_length,
                         max_solution_length, node_count);
+#else
+                s32 mutate_after = stb_rand() % scores[0].oncts;
+                s32 score = mutate_optimize_and_score(candidate, graph, onct_length,
+                        max_solution_length, node_count, mutate_after);
+#endif
                 scores[candidate_index].oncts = score;
                 scores[candidate_index].index = candidate_index;
             }
