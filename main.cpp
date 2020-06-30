@@ -22,7 +22,7 @@
 
 // for the moment optimizing the graph actually makes the results worse
 // it may be caused by storing the merged nodes in candidates
-//#define OPTIMIZE_GRAPH
+#define OPTIMIZE_GRAPH
 
 // hypothetical alternate breeding schemes:
 // find a place in the parent_a where it would be appropriate
@@ -254,7 +254,7 @@ void optimize_graph(Node *graph, s32 node_count) {
         }
     }
 
-    printf("merged nodes %d times\n", total_optimized);
+    //printf("merged nodes %d times\n", total_optimized);
 }
 
 Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_score) {
@@ -356,6 +356,15 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     // evolve
     //
 
+    s32 to_mutate[1024];
+    s32 to_mutate_count = 0;
+    for (s32 node_i = 0; node_i < node_count; node_i++) {
+        if (graph[node_i].edge_count > 1) {
+            to_mutate[to_mutate_count++] = node_i;
+        }
+    }
+    printf("%d to mutate\n", to_mutate_count);
+
     s32 generations = GENERATIONS;
     for (s32 gen_index = 0; gen_index < generations; gen_index++) {
 #if 0
@@ -430,12 +439,17 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
 #endif
                 // mutate
                 for (s32 i = 0; i < MUTATIONS; i++) {
+#if 0
                     s32 node_to_mutate = stb_rand() % node_count;
+#else
+                    s32 node_to_mutate = to_mutate[stb_rand() % to_mutate_count];
+#endif
                     Node node = graph[node_to_mutate];
                     double rand_v = stb_frand();
                     s32 new_edge = (s32)(rand_v * rand_v * node.edge_count);
                     candidate[node_to_mutate] = node.edges[new_edge];
                 }
+
                 s32 score = optimize_and_score(candidate, graph, onct_length,
                         max_solution_length, node_count);
                 scores[candidate_index].oncts = score;
@@ -466,9 +480,9 @@ int main(int argc, char **argv) {
     stm_setup();
 
 #ifdef SINGLE_TEST
-    char *path = "test.txt";
-    //char *path = "Instances/RandomNegativeErrors/9.200-40.txt";
-    s32 original_oncts = 10;
+    //char *path = "test.txt";
+    char *path = "Instances/RandomNegativeErrors/9.200-40.txt";
+    s32 original_oncts = 200;
     char **dict;
     s32 dict_size;
     dict = stb_stringfile(path, &dict_size);
