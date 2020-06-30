@@ -87,11 +87,6 @@ s32 score_candidate(Edge *candidate, s32 onct_length, s32 max_solution_length, s
         if (visited[current]) break;
         visited[current] = true;
         oncts_visited++;
-#if 0
-        printf("visiting %d:\n", current);
-        printf("\tnext %d\n", candidate[current].next);
-        printf("\tcost %d\n", candidate[current].cost);
-#endif
         if (candidate[current].cost + total_length > max_solution_length) {
             return oncts_visited;
         }
@@ -282,18 +277,6 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
 
 #ifdef OPTIMIZE_GRAPH
     optimize_graph(graph, node_count);
-#endif
-
-#if 0
-    puts("GRAPH:");
-    for (s32 i = 0; i < node_count; i++) {
-        Node n = graph[i];
-        printf("%d:", i);
-        for (s32 j = 0; j < n.edge_count; j++) {
-            printf("\t(%d,%d)", n.edges[j].next, n.edges[j].cost);
-        }
-        puts("");
-    }
 #endif
 
     //
