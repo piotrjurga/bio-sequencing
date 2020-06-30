@@ -1,38 +1,27 @@
-// fast
+// fast configuration
 #if 0
 #define POPULATION  512
 #define GENERATIONS 8
-#define PARENTS     (POPULATION/2)
-//#define BREED
-#define SPARSE_GRAPH
+#define PARENTS     (POPULATION/32)
+#define BREED
+//#define SPARSE_GRAPH
+#define MUTATIONS 4
+#define OPTIMIZE_GRAPH
 #endif
 
-// normal
+// normal configuration
 #if 1
 #define POPULATION  (1024*2)
 #define GENERATIONS (1024*2)
-#define PARENTS     (POPULATION/2)
+#define PARENTS     (POPULATION/4)
 #define BREED
-#define SPARSE_GRAPH
+//#define SPARSE_GRAPH
+#define MUTATIONS 8
+#define OPTIMIZE_GRAPH
 #endif
 
-#define MUTATIONS   2
 #define PARALLEL
 //#define SINGLE_TEST
-
-// for the moment optimizing the graph actually makes the results worse
-// it may be caused by storing the merged nodes in candidates
-#define OPTIMIZE_GRAPH
-
-// hypothetical alternate breeding schemes:
-// find a place in the parent_a where it would be appropriate
-// to try something else and only then switch to parent_b
-// - probably optimize and score at the same time, cuz it's easy
-// - and mutate at the same time too?
-// - could try some heuristic like split before a costly edge
-// - could find the split at random - better diversity
-// - could litterally dfs the crap out of the parents combined graph
-
 
 #include <stdio.h>
 #include <stdint.h>
@@ -189,51 +178,7 @@ s32 optimize_and_score(Edge *candidate, Node *graph, s32 onct_length,
     return oncts_visited;
 }
 
-s32 mutate_optimize_and_score(Edge *candidate, Node *graph, s32 onct_length,
-                       s32 max_solution_length, s32 node_count, s32 mutate_after) {
-    s32 oncts_visited = 0;
-    s32 total_length = onct_length;
-    s32 current = 0;
-    u8 visited[1024] = {};
-    bool mutation_done = false;
-    while (candidate[current].cost) {
-        visited[current] = true;
-        oncts_visited++;
-        if (!mutation_done && oncts_visited >= mutate_after && graph[current].edge_count > 1) {
-            double rand_v = stb_frand();
-            s32 new_edge_i = (s32)(rand_v * rand_v * graph[current].edge_count);
-            Edge new_edge = graph[current].edges[new_edge_i];
-            candidate[current] = new_edge;
-            mutation_done = true;
-        }
-        Edge edge = candidate[current];
-        bool too_long = edge.cost + total_length > max_solution_length;
-        bool next_visited = visited[edge.next];
-        if (too_long || next_visited) {
-            // try to find a legal edge
-            s32 i;
-            for (i = 0; i < graph[current].edge_count; i++) {
-                edge = graph[current].edges[i];
-                too_long = edge.cost + total_length > max_solution_length;
-                next_visited = visited[edge.next];
-                if (!too_long && !next_visited) {
-                    candidate[current] = edge;
-                    break;
-                }
-            }
-            if (i == graph[current].edge_count) { // legal edge not found
-                break;
-            }
-        }
-        total_length += edge.cost;
-        current = edge.next;
-        assert(current >= 0 && current < node_count);
-    }
-    return oncts_visited;
-}
-
 void optimize_graph(Node *graph, s32 node_count) {
-    s32 total_optimized = 0;
     // find optimal edges connecting [i] to [j]
     s32 optimal_edges[1024][1024] = {};
     for (s32 node_i = 0; node_i < node_count; node_i++) {
@@ -244,14 +189,6 @@ void optimize_graph(Node *graph, s32 node_count) {
             optimal_edges[node_i][e.next] += 1;
         }
     }
-#if 0
-    for (s32 i = 0; i < node_count; i++) {
-        for (s32 j = 0; j < node_count; j++) {
-            printf("%d;", optimal_edges[i][j]);
-        }
-        puts("");
-    }
-#endif
     // search for nodes to merge
     for (s32 node_i = 0; node_i < node_count; node_i++) {
         s32 row_sum = 0;
@@ -271,7 +208,6 @@ void optimize_graph(Node *graph, s32 node_count) {
         }
         if (col_sum != 1) continue;
         // at this point we know the nodes can be merged
-        total_optimized++;
         // delete all suboptimal edges from source node
         {
             Node *node = &graph[node_i];
@@ -296,8 +232,6 @@ void optimize_graph(Node *graph, s32 node_count) {
             }
         }
     }
-
-    //printf("merged nodes %d times\n", total_optimized);
 }
 
 Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_score) {
@@ -399,6 +333,7 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     // evolve
     //
 
+#ifdef OPTIMIZE_GRAPH
     s32 to_mutate[1024];
     s32 to_mutate_count = 0;
     for (s32 node_i = 0; node_i < node_count; node_i++) {
@@ -406,28 +341,11 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
             to_mutate[to_mutate_count++] = node_i;
         }
     }
-    printf("%d to mutate\n", to_mutate_count);
+    //printf("%d to mutate\n", to_mutate_count);
+#endif
 
     s32 generations = GENERATIONS;
     for (s32 gen_index = 0; gen_index < generations; gen_index++) {
-#if 0
-        printf("gen %d\n", gen_index);
-        // print all candidates
-        for (s32 i = 0; i < population; i++) {
-            Edge *candidate = (Edge *)(candidates + i*candidate_size);
-            for (s32 j = 0; j < node_count; j++) {
-                Edge e = candidate[j];
-                Node n = graph[j];
-                for (s32 k = 0; k < n.edge_count; k++) {
-                    if (n.edges[k].next == e.next) {
-                        printf("%d;", k);
-                        break;
-                    }
-                }
-            }
-            puts("");
-        }
-#endif
 
         qsort(scores, population, sizeof(Score), stb_intcmprev(0));
 
@@ -485,9 +403,9 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
                 //
                 // mutate
                 //
-#if 0
+
                 for (s32 i = 0; i < MUTATIONS; i++) {
-#if 0
+#ifndef OPTIMIZE_GRAPH
                     s32 node_to_mutate = stb_rand() % node_count;
 #else
                     s32 node_to_mutate = to_mutate[stb_rand() % to_mutate_count];
@@ -500,11 +418,6 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
 
                 s32 score = optimize_and_score(candidate, graph, onct_length,
                         max_solution_length, node_count);
-#else
-                s32 mutate_after = stb_rand() % scores[0].oncts;
-                s32 score = mutate_optimize_and_score(candidate, graph, onct_length,
-                        max_solution_length, node_count, mutate_after);
-#endif
                 scores[candidate_index].oncts = score;
                 scores[candidate_index].index = candidate_index;
             }
