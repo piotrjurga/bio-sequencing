@@ -1,5 +1,5 @@
 // fast configuration
-#if 0
+#if 1
 #define POPULATION  512
 #define GENERATIONS 8
 #define PARENTS     (POPULATION/32)
@@ -10,8 +10,19 @@
 #endif
 
 // normal configuration
-#if 1
+#if 0
 #define POPULATION  (1024*2)
+#define GENERATIONS (1024*2)
+#define PARENTS     (POPULATION/4)
+#define BREED
+//#define SPARSE_GRAPH
+#define MUTATIONS 8
+#define OPTIMIZE_GRAPH
+#endif
+
+// slow configuration
+#if 0
+#define POPULATION  (1024*8)
 #define GENERATIONS (1024*2)
 #define PARENTS     (POPULATION/4)
 #define BREED
@@ -327,10 +338,26 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     //printf("%d to mutate\n", to_mutate_count);
 #endif
 
+#ifdef GENERATIONS
     s32 generations = GENERATIONS;
-    for (s32 gen_index = 0; gen_index < generations; gen_index++) {
-
+    for (s32 gen_index = 0; gen_index < generations; gen_index++)
+#else
+    s32 last_best = 0;
+    s32 iterations_without_improvement = 0;
+    for (;;)
+#endif
+    {
         qsort(scores, population, sizeof(Score), stb_intcmprev(0));
+
+#ifndef GENERATIONS
+        if (scores[0].oncts == last_best) {
+            iterations_without_improvement++;
+        } else {
+            last_best = scores[0].oncts;
+            iterations_without_improvement = 0;
+        }
+        if (iterations_without_improvement > 512) break;
+#endif
 
 #ifdef PARALLEL
 #pragma omp parallel
@@ -407,12 +434,17 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
         }
     }
 
-    qsort(scores, population, sizeof(Score), stb_intcmprev(0));
-    s32 best_score = scores[0].oncts;
-    s32 best_index = scores[0].index;
+    s32 best_i = 0;
+    for (s32 i = 1; i < population; i++) {
+        if (scores[i].oncts > scores[best_i].oncts) {
+            best_i = i;
+        }
+    }
+    //qsort(scores, population, sizeof(Score), stb_intcmprev(0));
+    s32 best_score = scores[best_i].oncts;
+    s32 best_index = scores[best_i].index;
     s32 optimal_score = stb_min(dict_size, original_oncts);
     *percent_score = 100*(double)best_score / (double)optimal_score;
-    //printf("best = %d (%f%%)\n", best_score, *percent_score);
 
     Edge *best_candidate = (Edge *)malloc(candidate_size);
     memcpy(best_candidate,
