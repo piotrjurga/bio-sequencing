@@ -22,10 +22,10 @@
 
 // slow configuration
 #if 1
-#define POPULATION  (1024*8)
+#define POPULATION  (1024*2)
 // not defining GENERATIONS means "search until you find the optimal solution"
 //#define GENERATIONS (1024*2)
-#define MAX_GENERATIONS (1024*32)
+#define MAX_GENERATIONS (1024*8)
 #define PARENTS     (POPULATION/4)
 #define BREED
 //#define SPARSE_GRAPH
