@@ -10,7 +10,7 @@
 #endif
 
 // normal configuration
-#if 1
+#if 0
 #define POPULATION  (1024*2)
 #define GENERATIONS (1024*2)
 #define PARENTS     (POPULATION/4)
@@ -21,9 +21,10 @@
 #endif
 
 // slow configuration
-#if 0
-#define POPULATION  (1024*8)
-#define GENERATIONS (1024*2)
+#if 1
+#define POPULATION  (1024*2)
+//#define GENERATIONS (1024*2)
+#define MAX_GENERATIONS (1024*8)
 #define PARENTS     (POPULATION/4)
 #define BREED
 //#define SPARSE_GRAPH
@@ -337,6 +338,8 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     // evolve
     //
 
+    s32 optimal_score = stb_min(dict_size, original_oncts);
+
 #ifdef OPTIMIZE_GRAPH
     s32 to_mutate[1024];
     s32 to_mutate_count = 0;
@@ -352,21 +355,15 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     s32 generations = GENERATIONS;
     for (s32 gen_index = 0; gen_index < generations; gen_index++)
 #else
-    s32 last_best = 0;
-    s32 iterations_without_improvement = 0;
-    for (;;)
+    for (s32 gen_index = 0; true; gen_index++)
 #endif
     {
         qsort(scores, population, sizeof(Score), stb_intcmprev(0));
 
-#ifndef GENERATIONS
-        if (scores[0].oncts == last_best) {
-            iterations_without_improvement++;
-        } else {
-            last_best = scores[0].oncts;
-            iterations_without_improvement = 0;
-        }
-        if (iterations_without_improvement > 512) break;
+        if (scores[0].oncts == optimal_score) break;
+
+#ifdef MAX_GENERATIONS
+        if (gen_index > MAX_GENERATIONS) break;
 #endif
 
 #ifdef PARALLEL
@@ -453,7 +450,6 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     //qsort(scores, population, sizeof(Score), stb_intcmprev(0));
     s32 best_score = scores[best_i].oncts;
     s32 best_index = scores[best_i].index;
-    s32 optimal_score = stb_min(dict_size, original_oncts);
     *percent_score = 100*(double)best_score / (double)optimal_score;
 
     Edge *best_candidate = (Edge *)malloc(candidate_size);
@@ -524,7 +520,7 @@ int main(int argc, char **argv) {
         double elapsed = stm_ms(stm_since(start_time));
         stb_arr_push(scores, percent_score);
         stb_arr_push(times, elapsed);
-        printf("%s\t%f%%\t%fms\n", dir_entry->d_name, percent_score, elapsed);
+        printf("%s;%f%%;%fms\n", dir_entry->d_name, percent_score, elapsed);
         //s32 result = score_candidate(best, onct_length, max_solution_length, dict_size);
     }
 
@@ -539,8 +535,8 @@ int main(int argc, char **argv) {
     }
     double average_score = sum_score / stb_arr_len(scores);
     double average_time = sum_time / stb_arr_len(times);
-    puts("______________________________________________");
-    printf("average\t\t%f%%\t%fms\n", average_score, average_time);
+    //puts("______________________________________________");
+    printf("average;%f%%;%fms\n", average_score, average_time);
         
     return 0;
 }
