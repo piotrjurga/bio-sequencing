@@ -10,7 +10,7 @@
 #endif
 
 // normal configuration
-#if 1
+#if 0
 #define POPULATION  (1024*2)
 #define GENERATIONS (1024*2)
 #define PARENTS     (POPULATION/4)
@@ -21,13 +21,15 @@
 #endif
 
 // slow configuration
-#if 0
+#if 1
 #define POPULATION  (1024*8)
-#define GENERATIONS (1024*2)
+// not defining GENERATIONS means "search until you find the optimal solution"
+//#define GENERATIONS (1024*2)
+#define MAX_GENERATIONS (1024*32)
 #define PARENTS     (POPULATION/4)
 #define BREED
 //#define SPARSE_GRAPH
-#define MUTATIONS 8
+#define MUTATIONS 2
 #define OPTIMIZE_GRAPH
 #endif
 
@@ -181,10 +183,6 @@ s32 optimize_and_score(Edge *candidate, Node *graph, s32 onct_length,
         current = edge.next;
         assert(current >= 0 && current < node_count);
     }
-    // nocheckin
-    if (candidate[current].cost == 0) {
-        puts("exiting because cost is 0!!!!!!!!!!!!!!!");
-    }
     return oncts_visited;
 }
 
@@ -318,7 +316,9 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
          candidate_index++)
     {
         Edge *candidate = (Edge *)(candidates + candidate_index*candidate_size);
-        for (s32 i = 0; i < node_count; i++) {
+        s32 start_edge_index = candidate_index % (graph[0].edge_count);
+        candidate[0] = graph[0].edges[start_edge_index];
+        for (s32 i = 1; i < node_count; i++) {
             s32 edge_count = graph[i].edge_count;
             if (edge_count) {
                 //s32 chosen_edge = stb_rand() % stb_min(2, edge_count);
@@ -337,6 +337,8 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     // evolve
     //
 
+    s32 optimal_score = stb_min(dict_size, original_oncts);
+
 #ifdef OPTIMIZE_GRAPH
     s32 to_mutate[1024];
     s32 to_mutate_count = 0;
@@ -352,21 +354,15 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     s32 generations = GENERATIONS;
     for (s32 gen_index = 0; gen_index < generations; gen_index++)
 #else
-    s32 last_best = 0;
-    s32 iterations_without_improvement = 0;
-    for (;;)
+    for (s32 gen_index = 0; true; gen_index++)
 #endif
     {
         qsort(scores, population, sizeof(Score), stb_intcmprev(0));
 
-#ifndef GENERATIONS
-        if (scores[0].oncts == last_best) {
-            iterations_without_improvement++;
-        } else {
-            last_best = scores[0].oncts;
-            iterations_without_improvement = 0;
-        }
-        if (iterations_without_improvement > 512) break;
+        if (scores[0].oncts == optimal_score) break;
+
+#ifdef MAX_GENERATIONS
+        if (gen_index > MAX_GENERATIONS) break;
 #endif
 
 #ifdef PARALLEL
@@ -453,7 +449,6 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     //qsort(scores, population, sizeof(Score), stb_intcmprev(0));
     s32 best_score = scores[best_i].oncts;
     s32 best_index = scores[best_i].index;
-    s32 optimal_score = stb_min(dict_size, original_oncts);
     *percent_score = 100*(double)best_score / (double)optimal_score;
 
     Edge *best_candidate = (Edge *)malloc(candidate_size);
@@ -514,8 +509,8 @@ int main(int argc, char **argv) {
         char **dict;
         s32 dict_size;
         dict = stb_stringfile(path, &dict_size);
-        //s32 onct_length = strlen(dict[0]);
-        //s32 max_solution_length = original_oncts + onct_length - 1;
+        s32 onct_length = strlen(dict[0]);
+        s32 max_solution_length = original_oncts + onct_length - 1;
         double percent_score = 0;
 
         u64 start_time = stm_now();
@@ -525,6 +520,7 @@ int main(int argc, char **argv) {
         stb_arr_push(scores, percent_score);
         stb_arr_push(times, elapsed);
         printf("%s\t%f%%\t%fms\n", dir_entry->d_name, percent_score, elapsed);
+        print_solution(dict, best, max_solution_length);
         //s32 result = score_candidate(best, onct_length, max_solution_length, dict_size);
     }
 
