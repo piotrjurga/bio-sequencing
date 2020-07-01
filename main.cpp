@@ -1,5 +1,5 @@
 // fast configuration
-#if 1
+#if 0
 #define POPULATION  512
 #define GENERATIONS 8
 #define PARENTS     (POPULATION/32)
@@ -10,7 +10,7 @@
 #endif
 
 // normal configuration
-#if 0
+#if 1
 #define POPULATION  (1024*2)
 #define GENERATIONS (1024*2)
 #define PARENTS     (POPULATION/4)
@@ -92,7 +92,7 @@ s32 get_overlap(char *a, char *b, s32 onct_length) {
 s32 score_candidate(Edge *candidate, s32 onct_length, s32 max_solution_length, s32 node_count) {
     s32 oncts_visited = 0;
     s32 total_length = onct_length;
-    s32 current = 0;
+    s32 current = candidate[0].next;
     u8 visited[1024] = {};
     while (candidate[current].cost) {
         if (visited[current]) break;
@@ -110,13 +110,13 @@ s32 score_candidate(Edge *candidate, s32 onct_length, s32 max_solution_length, s
 
 void print_path(char **dict, Edge *candidate, s32 max_solution_length) {
     s32 total_length = strlen(dict[0]);
-    s32 current = 0;
+    s32 current = candidate[0].next;
     u8 visited[1024] = {};
     while (candidate[current].cost) {
         if (visited[current]) break;
         visited[current] = true;
 
-        printf("%s\n", dict[current]);
+        printf("%s\n", dict[current-1]);
         if (candidate[current].cost + total_length > max_solution_length) {
             break;
         }
@@ -130,14 +130,14 @@ void print_path(char **dict, Edge *candidate, s32 max_solution_length) {
 void print_solution(char **dict, Edge *candidate, s32 max_solution_length) {
     s32 onct_length = strlen(dict[0]);
     s32 total_length = onct_length;
-    s32 current = 0;
+    s32 current = candidate[0].next;
     u8 visited[1024] = {};
     s32 last_cost = onct_length;
     while (candidate[current].cost) {
         if (visited[current]) break;
         visited[current] = true;
 
-        printf("%s", dict[current] + (onct_length-last_cost));
+        printf("%s", dict[current-1] + (onct_length-last_cost));
         if (candidate[current].cost + total_length > max_solution_length) {
             break;
         }
@@ -153,7 +153,7 @@ s32 optimize_and_score(Edge *candidate, Node *graph, s32 onct_length,
                        s32 max_solution_length, s32 node_count) {
     s32 oncts_visited = 0;
     s32 total_length = onct_length;
-    s32 current = 0;
+    s32 current = candidate[0].next;
     u8 visited[1024] = {};
     while (candidate[current].cost) {
         visited[current] = true;
@@ -180,6 +180,10 @@ s32 optimize_and_score(Edge *candidate, Node *graph, s32 onct_length,
         total_length += edge.cost;
         current = edge.next;
         assert(current >= 0 && current < node_count);
+    }
+    // nocheckin
+    if (candidate[current].cost == 0) {
+        puts("exiting because cost is 0!!!!!!!!!!!!!!!");
     }
     return oncts_visited;
 }
@@ -248,7 +252,7 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     // build the graph
     //
 
-    s32 node_count = dict_size;
+    s32 node_count = dict_size + 1;
 
     // edges are allocated after the nodes
     s32 nodes_mem_size = sizeof(Node) * node_count;
@@ -256,19 +260,24 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
 
     Node *graph = (Node *)malloc(nodes_mem_size + edges_mem_size);
     Edge *edges = (Edge *)(graph + node_count);
-    s32 total_edges = 0;
 
-    for (s32 node_i = 0; node_i < node_count; node_i++) {
+    // add a synthetic node with 0 cost connections to all other nodes
+    graph[0].edges = edges;
+    graph[0].edge_count = 0;
+    for (s32 dest_i = 1; dest_i < node_count; dest_i++) {
+        Edge e = {};
+        e.next = dest_i;
+        graph[0].edges[graph[0].edge_count++] = e;
+    }
+    s32 total_edges = graph[0].edge_count;
+
+    for (s32 node_i = 1; node_i < node_count; node_i++) {
         Node *node = &graph[node_i];
         node->edges = edges + total_edges;
         node->edge_count = 0;
-        for (s32 dest_i = 0; dest_i < node_count; dest_i++) {
+        for (s32 dest_i = 1; dest_i < node_count; dest_i++) {
             if (node_i == dest_i) continue;
-            if (node_i == 48 && dest_i == 18) {
-                s32 test = 0;
-                test++;
-            }
-            s32 overlap = get_overlap(dict[node_i], dict[dest_i], onct_length);
+            s32 overlap = get_overlap(dict[node_i-1], dict[dest_i-1], onct_length);
 #ifdef SPARSE_GRAPH
             if (overlap > 0)
 #endif
@@ -287,7 +296,8 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     }
 
 #ifdef OPTIMIZE_GRAPH
-    optimize_graph(graph, node_count);
+    // pass graph without first synthetic node
+    optimize_graph(graph+1, node_count-1);
 #endif
 
     //
