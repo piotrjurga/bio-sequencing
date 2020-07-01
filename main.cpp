@@ -2,29 +2,17 @@
 #if 0
 #define POPULATION  512
 #define GENERATIONS 8
-#define PARENTS     (POPULATION/32)
+#define PARENTS     (POPULATION/16)
 #define BREED
 //#define SPARSE_GRAPH
-#define MUTATIONS 4
-#define OPTIMIZE_GRAPH
+#define MUTATIONS 1
+//#define OPTIMIZE_GRAPH
 #endif
 
 // normal configuration
-#if 0
-#define POPULATION  (1024*2)
-#define GENERATIONS (1024*2)
-#define PARENTS     (POPULATION/4)
-#define BREED
-//#define SPARSE_GRAPH
-#define MUTATIONS 8
-#define OPTIMIZE_GRAPH
-#endif
-
-// slow configuration
 #if 1
 #define POPULATION  (1024*2)
-//#define GENERATIONS (1024*2)
-#define MAX_GENERATIONS (1024*8)
+#define GENERATIONS (1024*8)
 #define PARENTS     (POPULATION/4)
 #define BREED
 //#define SPARSE_GRAPH
@@ -324,6 +312,9 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
             if (edge_count) {
                 //s32 chosen_edge = stb_rand() % stb_min(2, edge_count);
                 s32 chosen_edge = 0;
+                if (i == 0) {
+                    chosen_edge = candidate_index % edge_count;
+                }
                 candidate[i] = graph[i].edges[chosen_edge];
             }
         }
@@ -351,20 +342,12 @@ Edge * solve(char **dict, s32 dict_size, s32 original_oncts, double *percent_sco
     //printf("%d to mutate\n", to_mutate_count);
 #endif
 
-#ifdef GENERATIONS
     s32 generations = GENERATIONS;
     for (s32 gen_index = 0; gen_index < generations; gen_index++)
-#else
-    for (s32 gen_index = 0; true; gen_index++)
-#endif
     {
         qsort(scores, population, sizeof(Score), stb_intcmprev(0));
 
         if (scores[0].oncts == optimal_score) break;
-
-#ifdef MAX_GENERATIONS
-        if (gen_index > MAX_GENERATIONS) break;
-#endif
 
 #ifdef PARALLEL
 #pragma omp parallel
@@ -468,8 +451,9 @@ int main(int argc, char **argv) {
 
 #ifdef SINGLE_TEST
     //char *path = "test.txt";
-    char *path = "Instances/RandomNegativeErrors/9.200-40.txt";
-    s32 original_oncts = 200;
+    //char *path = "Instances/RandomNegativeErrors/9.200-40.txt";
+    char *path = "Instances/RandomNegativeErrors/10.500-200.txt";
+    s32 original_oncts = 500;
     char **dict;
     s32 dict_size;
     dict = stb_stringfile(path, &dict_size);
@@ -479,7 +463,7 @@ int main(int argc, char **argv) {
     Edge *best = solve(dict, dict_size, original_oncts, &percent_score);
     (void)best;
     double elapsed = stm_ms(stm_since(start_time));
-    printf("9.200-40.txt\t%f%%\t%fms\n", percent_score, elapsed);
+    printf("result\t%f%%\t%fms\n", percent_score, elapsed);
     //print_path(dict, best, 209);
     //print_solution(dict, best, 209);
 
@@ -510,8 +494,9 @@ int main(int argc, char **argv) {
         char **dict;
         s32 dict_size;
         dict = stb_stringfile(path, &dict_size);
-        //s32 onct_length = strlen(dict[0]);
-        //s32 max_solution_length = original_oncts + onct_length - 1;
+        s32 onct_length = strlen(dict[0]);
+        s32 max_solution_length = original_oncts + onct_length - 1;
+        (void)max_solution_length;
         double percent_score = 0;
 
         u64 start_time = stm_now();
@@ -521,10 +506,13 @@ int main(int argc, char **argv) {
         stb_arr_push(scores, percent_score);
         stb_arr_push(times, elapsed);
         printf("%s;%f%%;%fms\n", dir_entry->d_name, percent_score, elapsed);
+        //printf("%s;%f%%;", dir_entry->d_name, percent_score);
+        //print_solution(dict, best, max_solution_length);
         //s32 result = score_candidate(best, onct_length, max_solution_length, dict_size);
     }
 
     // calculate average score and time
+#if 1
     double sum_score = 0;
     for (s32 i = 0; i < stb_arr_len(scores); i++) {
         sum_score += scores[i];
@@ -537,6 +525,7 @@ int main(int argc, char **argv) {
     double average_time = sum_time / stb_arr_len(times);
     //puts("______________________________________________");
     printf("average;%f%%;%fms\n", average_score, average_time);
+#endif
         
     return 0;
 }
